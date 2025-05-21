@@ -1,0 +1,14 @@
+D:\Developer\PSFixTools\bin\Debug\net8.0\PSFixTools.exe
+D:\Developer\PSFixTools\bin\Debug\net8.0\PSFixTools.deps.json
+D:\Developer\PSFixTools\bin\Debug\net8.0\PSFixTools.runtimeconfig.json
+D:\Developer\PSFixTools\bin\Debug\net8.0\PSFixTools.dll
+D:\Developer\PSFixTools\bin\Debug\net8.0\PSFixTools.pdb
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.GeneratedMSBuildEditorConfig.editorconfig
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.AssemblyInfoInputs.cache
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.AssemblyInfo.cs
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.csproj.CoreCompileInputs.cache
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.dll
+D:\Developer\PSFixTools\obj\Debug\net8.0\refint\PSFixTools.dll
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.pdb
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.genruntimeconfig.cache
+D:\Developer\PSFixTools\obj\Debug\net8.0\ref\PSFixTools.dll
