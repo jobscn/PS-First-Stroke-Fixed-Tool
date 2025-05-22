@@ -8,7 +8,7 @@
 
 ### Problem Description
 
-When using an **iPad Pro 2021** with **Apple Pencil** to connect to **Windows 10/11** via **RDP [Windows 11.1.4 (5663)]** for **Adobe Photoshop (versions 2022-2025)**, you may encounter an issue where the first touch input with the Apple Pencil fails after clicking a UI element. The second touch input is then required for the Apple Pencil to function correctly within Photoshop.
+When using an **iPad Pro 2021** with **Apple Pencil**, connecting to **Windows 10/11** via the **RDP protocol** using the **Microsoft Remote Desktop app for iPadOS (version 11.1.4 (5663))**, for **Adobe Photoshop (versions 2022-2025)**, you may encounter an issue where the first touch input with the Apple Pencil fails after clicking a UI element. The second touch input is then required for the Apple Pencil to function correctly within Photoshop.
 
 ### Solution
 
@@ -23,7 +23,7 @@ This should help maintain focus and ensure the first Apple Pencil input is regis
 
 ---
 
-**Note:** Please ensure your RDP client (Windows 11.1.4 (5663)) and Photoshop versions are as specified, as this solution targets this specific configuration.
+**Note:** Please ensure your **Microsoft Remote Desktop app for iPadOS version is 11.1.4 (5663)** and Photoshop versions are as specified, as this solution targets this specific configuration.
 
 ---
 
@@ -31,7 +31,7 @@ This should help maintain focus and ensure the first Apple Pencil input is regis
 
 ### 问题描述
 
-当使用 **iPad Pro 2021** 配备 **Apple Pencil** 通过 **RDP [Windows 11.1.4 (5663)]** 连接到 **Windows 10/11** 操作系统，并在 **Adobe Photoshop (2022-2025 版本)** 中操作时，您可能会遇到以下问题：点击任意UI元素后，Apple Pencil 的第一次触摸输入会失效，需要第二次触摸才能使 Apple Pencil 在 Photoshop 中正常工作。
+当使用 **iPad Pro 2021** 配备 **Apple Pencil**，通过 **RDP 协议**（使用 **iPadOS 上的 Microsoft 远程桌面应用，版本 11.1.4 (5663)**）连接到 **Windows 10/11** 操作系统，并在 **Adobe Photoshop (2022-2025 版本)** 中操作时，您可能会遇到以下问题：点击任意UI元素后，Apple Pencil 的第一次触摸输入会失效，需要第二次触摸才能使 Apple Pencil 在 Photoshop 中正常工作。
 
 ### 解决方案
 
@@ -46,4 +46,4 @@ This should help maintain focus and ensure the first Apple Pencil input is regis
 
 ---
 
-**请注意：** 此解决方案针对上述特定的 RDP 客户端版本 (Windows 11.1.4 (5663)) 和 Photoshop 版本。请确保您的配置与描述相符。
+**请注意：** 此解决方案针对上述特定的 **iPadOS 版 Microsoft 远程桌面应用版本 (11.1.4 (5663))** 和 Photoshop 版本。请确保您的配置与描述相符。

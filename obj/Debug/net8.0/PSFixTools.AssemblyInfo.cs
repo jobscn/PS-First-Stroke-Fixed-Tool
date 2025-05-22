@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PSFixTools")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+093d3956a01a4e21629343ce6d9b50dfdf71d6dd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2bcc345da936c72c3b9f5a5942d8f6eab4100434")]
 [assembly: System.Reflection.AssemblyProductAttribute("PSFixTools")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PSFixTools")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

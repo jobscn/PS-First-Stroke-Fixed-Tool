@@ -12,3 +12,4 @@ D:\Developer\PSFixTools\obj\Debug\net8.0\refint\PSFixTools.dll
 D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.pdb
 D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.genruntimeconfig.cache
 D:\Developer\PSFixTools\obj\Debug\net8.0\ref\PSFixTools.dll
+D:\Developer\PSFixTools\obj\Debug\net8.0\PSFixTools.sourcelink.json
