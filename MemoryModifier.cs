@@ -22,7 +22,9 @@ public class MemoryModifier
 
     private static string processName = "Photoshop";
     private static long offset = 0x9D36768; // 请确保针对您的PS版本是正确的
-    private static long valueToWrite = 140698365506448; // 请确保这个值是您期望写入的
+    // private static long valueToWrite = 140698365506448; // This will be captured dynamically
+    private static long valueToWrite; // Will store the captured value
+    private static bool valueToLockCaptured = false; // Flag to indicate if the value has been captured
 
     private static IntPtr processHandle = IntPtr.Zero;
     private static IntPtr baseAddress = IntPtr.Zero;
@@ -31,18 +33,17 @@ public class MemoryModifier
 
     private static bool isCurrentlyConnected = false;
     private static bool hasPrintedFailureMessageInThisDisconnectCycle = false;
-    private static int lastPrintedWriteErrorCode = 0;
+    private static int lastPrintedWriteErrorCode = 0; // Also used for capture phase status codes
 
     // DEBUG模式专用变量
     private static int lastDebugReadErrorCode = 0;
-    private static long lastDisplayedDebugValue; // 用于存储上次显示的值
-    private static bool hasDisplayedInitialDebugValue = false; // 是否已显示过初始值
+    private static long lastDisplayedDebugValue;
+    private static bool hasDisplayedInitialDebugValue = false;
 
-    private static int lockIntervalMilliseconds = 100; // 写入间隔
-    private static int debugReadIntervalMilliseconds = 1000; // DEBUG读取间隔
+    private static int lockIntervalMilliseconds = 10;
+    private static int debugReadIntervalMilliseconds = 1000;
     private static bool debugMode = false;
     private static Thread debugReadThread = null;
-
 
     private static bool AcquireTargetProcess()
     {
@@ -125,16 +126,17 @@ public class MemoryModifier
             CloseHandle(processHandle); processHandle = IntPtr.Zero; isCurrentlyConnected = false; targetProcess = null; return false;
         }
 
-        if (!isCurrentlyConnected)
+        if (!isCurrentlyConnected) // Only print this if it's a new connection
         {
-            Console.WriteLine($"{DateTime.Now}: 成功锁定 {localTargetProcess.ProcessName} (ID: {localTargetProcess.Id}, 基地址: 0x{baseAddress.ToInt64():X})。监控服务运行中...");
+            Console.WriteLine($"{DateTime.Now}: 成功连接到 {localTargetProcess.ProcessName} (ID: {localTargetProcess.Id}, 基地址: 0x{baseAddress.ToInt64():X})。服务准备就绪...");
         }
         isCurrentlyConnected = true;
         hasPrintedFailureMessageInThisDisconnectCycle = false;
         lastPrintedWriteErrorCode = 0;
-        // 重置DEBUG相关状态，以便在新连接时首次读取能显示
+        // 重置DEBUG相关状态
         lastDebugReadErrorCode = 0;
         hasDisplayedInitialDebugValue = false;
+        valueToLockCaptured = false; // IMPORTANT: Reset capture flag on new/re-acquired process
         targetProcess = localTargetProcess;
         return true;
     }
@@ -184,7 +186,6 @@ public class MemoryModifier
                     if (!BitConverter.IsLittleEndian) { Array.Reverse(readValueBuffer); }
                     long currentValueInDebug = BitConverter.ToInt64(readValueBuffer, 0);
 
-                    // 只有当值变化或首次显示时才打印
                     if (!hasDisplayedInitialDebugValue || currentValueInDebug != lastDisplayedDebugValue)
                     {
                         Console.WriteLine($"{DateTime.Now}: DEBUG_READ - Addr: 0x{targetAddress.ToInt64():X}, Current Value: {currentValueInDebug} (0x{currentValueInDebug:X})");
@@ -202,15 +203,12 @@ public class MemoryModifier
                         else Console.WriteLine($"{DateTime.Now}: DEBUG_READ - 读取当前值失败 from 0x{targetAddress.ToInt64():X}. Error: {debugReadErr} ({GetErrorMessage(debugReadErr)})");
                         lastDebugReadErrorCode = debugReadErr;
                     }
-                    // 如果读取失败，我们可能希望重置 hasDisplayedInitialDebugValue，以便下次成功读取时能打印
-                    // 但如果错误是持久的，这会导致每次错误恢复后都打印。暂时保持现状，只在成功连接时重置。
                 }
             }
             Thread.Sleep(debugReadIntervalMilliseconds);
         }
         Console.WriteLine($"{DateTime.Now}: DEBUG - 读取线程已退出。");
     }
-
 
     public static void Main(string[] args)
     {
@@ -222,7 +220,7 @@ public class MemoryModifier
         else if (!string.IsNullOrWhiteSpace(intervalInput)) Console.WriteLine("无效的毫秒数输入，将使用默认值。");
         Console.WriteLine($"[写入]锁间隔设置为: {lockIntervalMilliseconds} 毫秒");
 
-        Console.Write("是否启用DEBUG模式 (仅读取并显示变化的值)? (Y/N, 默认: N): "); // 更新提示
+        Console.Write("是否启用DEBUG模式 (仅读取并显示变化的值)? (Y/N, 默认: N): ");
         string debugInput = Console.ReadLine();
         if (debugInput.Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
         {
@@ -237,13 +235,16 @@ public class MemoryModifier
         }
         else { debugMode = false; Console.WriteLine("DEBUG模式已禁用。"); }
 
-        Console.WriteLine($"程序启动 - {(debugMode ? "仅监控模式" : $"尝试锁定 {processName}.exe + 0x{offset:X} 的值为 {valueToWrite} (0x{valueToWrite:X})")}");
+        if (debugMode) {
+            Console.WriteLine($"程序启动 - 仅监控模式: 读取 {processName}.exe + 0x{offset:X}");
+        } else {
+            Console.WriteLine($"程序启动 - 将首先读取 {processName}.exe + 0x{offset:X} 的一个非零值，然后将其锁定。");
+        }
         Console.WriteLine("将持续尝试，按 Ctrl+C 退出程序。");
         Console.WriteLine("--------------------------------------------------");
 
         Console.CancelKeyPress += new ConsoleCancelEventHandler(OnExit);
-        byte[] bufferToWrite = BitConverter.GetBytes(valueToWrite);
-        if (!BitConverter.IsLittleEndian) { Array.Reverse(bufferToWrite); }
+        byte[] bufferToWrite = null; // Will be set after value is captured
 
         while (keepRunning)
         {
@@ -257,30 +258,27 @@ public class MemoryModifier
 
             if (needsReacquire)
             {
-                if (isCurrentlyConnected)
+                if (isCurrentlyConnected) // Connection was lost
                 {
-                    Console.WriteLine($"{DateTime.Now}: {processName}.exe 连接丢失或已退出，{(debugMode ? "停止监控。" : "正在尝试重新锁定...")}");
+                    Console.WriteLine($"{DateTime.Now}: {processName}.exe 连接丢失或已退出。{(debugMode ? "停止监控。" : "正在尝试重新连接并重新捕获锁定值...")}");
                     isCurrentlyConnected = false;
-                    hasPrintedFailureMessageInThisDisconnectCycle = false;
+                    hasPrintedFailureMessageInThisDisconnectCycle = false; // Allow new failure messages
                     lastPrintedWriteErrorCode = 0;
-                    hasDisplayedInitialDebugValue = false; // 当连接丢失时，重置，以便下次连接成功后能打印第一个值
+                    valueToLockCaptured = false; // Reset capture flag
+                    hasDisplayedInitialDebugValue = false; // Reset for debug mode
                     if (processHandle != IntPtr.Zero) { CloseHandle(processHandle); processHandle = IntPtr.Zero; }
                     baseAddress = IntPtr.Zero; targetProcess = null;
                 }
 
                 if (!AcquireTargetProcess())
                 {
-                    int sleepTimeTotal = 0;
-                    while (sleepTimeTotal < lockIntervalMilliseconds && keepRunning) // 主循环仍以lockIntervalMilliseconds为基础节奏
-                    {
-                        int currentSleep = Math.Min(100, lockIntervalMilliseconds - sleepTimeTotal);
-                        Thread.Sleep(currentSleep);
-                        sleepTimeTotal += currentSleep;
-                    }
+                    // Wait before retrying to acquire
+                    Thread.Sleep(Math.Max(1000, lockIntervalMilliseconds)); // Ensure at least 1 sec wait if lockInterval is too short
                     continue;
                 }
-                else
+                else // Successfully reacquired
                 {
+                    // valueToLockCaptured is already reset in AcquireTargetProcess
                     if (debugMode && (debugReadThread == null || !debugReadThread.IsAlive))
                     {
                         debugReadThread = new Thread(DebugReadLoop) { IsBackground = true };
@@ -291,16 +289,93 @@ public class MemoryModifier
 
             if (!isCurrentlyConnected || !keepRunning) { Thread.Sleep(lockIntervalMilliseconds); continue; }
 
-            // 如果启用了DEBUG模式，主循环将不再执行写入操作。
-            // 如果希望写入和DEBUG读取同时进行，则移除下一行 `if(debugMode) continue;` 的判断
-            // 当前的请求是“就单纯读取实时值并展示”，意味着DEBUG模式下不写入。
             if (debugMode)
             {
-                Thread.Sleep(lockIntervalMilliseconds); // DEBUG模式下主线程也需要休眠，否则此循环会空耗CPU
+                Thread.Sleep(lockIntervalMilliseconds); // Main thread sleeps while debug thread works
                 continue;
             }
 
-            // --- 以下是写入逻辑，仅在非DEBUG模式下执行 ---
+            // --- Non-DEBUG mode: Capture value if not yet captured, then write ---
+            if (!valueToLockCaptured)
+            {
+                IntPtr addressToReadFrom;
+                try
+                {
+                    if (IntPtr.Size == 8) { addressToReadFrom = new IntPtr(baseAddress.ToInt64() + offset); }
+                    else
+                    {
+                        if (offset > int.MaxValue || offset < int.MinValue)
+                        {
+                            if (lastPrintedWriteErrorCode != -3)
+                            {
+                                Console.WriteLine($"{DateTime.Now}: CAPTURE_READ - 偏移量 0x{offset:X} 对于32位寻址过大。");
+                                lastPrintedWriteErrorCode = -3;
+                            }
+                            Thread.Sleep(lockIntervalMilliseconds); continue;
+                        }
+                        addressToReadFrom = IntPtr.Add(baseAddress, (int)offset);
+                    }
+
+                    byte[] readBuffer = new byte[8]; // For long
+                    int bytesRead;
+                    bool readSuccess = ReadProcessMemory(processHandle, addressToReadFrom, readBuffer, (uint)readBuffer.Length, out bytesRead);
+
+                    if (readSuccess && bytesRead == readBuffer.Length)
+                    {
+                        if (!BitConverter.IsLittleEndian) { Array.Reverse(readBuffer); }
+                        long initialValue = BitConverter.ToInt64(readBuffer, 0);
+
+                        if (initialValue != 0)
+                        {
+                            valueToWrite = initialValue;
+                            bufferToWrite = BitConverter.GetBytes(valueToWrite);
+                            if (!BitConverter.IsLittleEndian) { Array.Reverse(bufferToWrite); }
+                            valueToLockCaptured = true;
+                            Console.WriteLine($"{DateTime.Now}: SUCCESS_CAPTURE - 已捕获锁定值: {valueToWrite} (0x{valueToWrite:X}) 从地址 0x{addressToReadFrom.ToInt64():X}.");
+                            Console.WriteLine($"{DateTime.Now}: 将以此值进行锁定，间隔: {lockIntervalMilliseconds}ms.");
+                            lastPrintedWriteErrorCode = 0; // Clear previous status
+                        }
+                        else
+                        {
+                            if (lastPrintedWriteErrorCode != -4)
+                            {
+                                Console.WriteLine($"{DateTime.Now}: WAITING_CAPTURE - 从 0x{addressToReadFrom.ToInt64():X} 读取到零值。等待非零值...");
+                                lastPrintedWriteErrorCode = -4;
+                            }
+                            Thread.Sleep(lockIntervalMilliseconds); continue;
+                        }
+                    }
+                    else
+                    {
+                        int captureReadErr = readSuccess ? -101 : Marshal.GetLastWin32Error();
+                        if (captureReadErr != lastPrintedWriteErrorCode)
+                        {
+                            if (readSuccess) Console.WriteLine($"{DateTime.Now}: CAPTURE_READ - 从 0x{addressToReadFrom.ToInt64():X} 读取的字节数不足 (实际: {bytesRead}).");
+                            else Console.WriteLine($"{DateTime.Now}: CAPTURE_READ - 从 0x{addressToReadFrom.ToInt64():X} 读取初始值失败. Error: {captureReadErr} ({GetErrorMessage(captureReadErr)})");
+                            lastPrintedWriteErrorCode = captureReadErr;
+                        }
+                        Thread.Sleep(lockIntervalMilliseconds); continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (lastPrintedWriteErrorCode != -5)
+                    {
+                        Console.WriteLine($"{DateTime.Now}: CAPTURE_READ - 读取初始值时发生异常: {ex.Message}");
+                        lastPrintedWriteErrorCode = -5;
+                    }
+                    isCurrentlyConnected = false; // Force re-acquire in next loop
+                    Thread.Sleep(lockIntervalMilliseconds); continue;
+                }
+            }
+
+            if (!valueToLockCaptured) // If still not captured (e.g. value was 0, or read failed)
+            {
+                Thread.Sleep(lockIntervalMilliseconds);
+                continue;
+            }
+
+            // --- Actual Write Logic (only if not in debug mode and value captured) ---
             try
             {
                 IntPtr targetAddress;
@@ -309,7 +384,7 @@ public class MemoryModifier
                 {
                     if (offset > int.MaxValue || offset < int.MinValue)
                     {
-                        if (lastPrintedWriteErrorCode != -1) { Console.WriteLine($"{DateTime.Now}: 偏移量 0x{offset:X} 对于32位寻址过大。"); lastPrintedWriteErrorCode = -1; }
+                        if (lastPrintedWriteErrorCode != -1) { Console.WriteLine($"{DateTime.Now}: WRITE - 偏移量 0x{offset:X} 对于32位寻址过大。"); lastPrintedWriteErrorCode = -1; }
                         Thread.Sleep(lockIntervalMilliseconds); continue;
                     }
                     targetAddress = IntPtr.Add(baseAddress, (int)offset);
@@ -322,24 +397,27 @@ public class MemoryModifier
                     int errorCode = Marshal.GetLastWin32Error();
                     if (errorCode != lastPrintedWriteErrorCode)
                     {
-                        Console.WriteLine($"{DateTime.Now}: 写入内存失败. Addr: 0x{targetAddress.ToInt64():X}, Err: {errorCode} ({GetErrorMessage(errorCode)})");
+                        Console.WriteLine($"{DateTime.Now}: WRITE - 写入内存失败. Addr: 0x{targetAddress.ToInt64():X}, Value: {valueToWrite} (0x{valueToWrite:X}), Err: {errorCode} ({GetErrorMessage(errorCode)})");
                         lastPrintedWriteErrorCode = errorCode;
                     }
-                    if (errorCode == 5 || errorCode == 299 || errorCode == 998 || errorCode == 6)
+                    if (errorCode == 5 || errorCode == 299 || errorCode == 998 || errorCode == 6) // Critical errors suggesting handle invalidation
                     {
-                        if (isCurrentlyConnected) { isCurrentlyConnected = false; hasPrintedFailureMessageInThisDisconnectCycle = false; }
-                        if (processHandle != IntPtr.Zero) { CloseHandle(processHandle); processHandle = IntPtr.Zero; }
-                        baseAddress = IntPtr.Zero; targetProcess = null;
+                        isCurrentlyConnected = false; // Force re-acquire
                     }
                 }
-                else { if (lastPrintedWriteErrorCode != 0) lastPrintedWriteErrorCode = 0; }
+                else // Write was successful
+                {
+                    if (lastPrintedWriteErrorCode != 0 && lastPrintedWriteErrorCode != -4) // Clear error if it wasn't the "waiting for zero" status
+                    {
+                        // Console.WriteLine($"{DateTime.Now}: WRITE_SUCCESS - Addr: 0x{targetAddress.ToInt64():X} locked to {valueToWrite}"); // Optional: can be very verbose
+                        lastPrintedWriteErrorCode = 0;
+                    }
+                }
             }
             catch (Exception ex)
             {
-                if (lastPrintedWriteErrorCode != -2) { Console.WriteLine($"{DateTime.Now}: 主循环写入操作中发生异常: {ex.Message}"); lastPrintedWriteErrorCode = -2; }
-                isCurrentlyConnected = false; hasPrintedFailureMessageInThisDisconnectCycle = false;
-                if (processHandle != IntPtr.Zero) { CloseHandle(processHandle); processHandle = IntPtr.Zero; }
-                baseAddress = IntPtr.Zero; targetProcess = null;
+                if (lastPrintedWriteErrorCode != -2) { Console.WriteLine($"{DateTime.Now}: WRITE - 主循环写入操作中发生异常: {ex.Message}"); lastPrintedWriteErrorCode = -2; }
+                isCurrentlyConnected = false; // Force re-acquire
             }
             Thread.Sleep(lockIntervalMilliseconds);
         }
@@ -350,16 +428,31 @@ public class MemoryModifier
     {
         Console.WriteLine("接收到 Ctrl+C 信号，准备退出..."); args.Cancel = true; keepRunning = false;
     }
+
     private static void Cleanup()
     {
         if (processHandle != IntPtr.Zero) { Console.WriteLine($"{DateTime.Now}: 关闭进程句柄 0x{processHandle.ToInt64():X}..."); CloseHandle(processHandle); processHandle = IntPtr.Zero; }
         isCurrentlyConnected = false;
     }
+
     private static string GetErrorMessage(int errorCode)
     {
-        if (errorCode == -100) return "Partial read";
-        if (errorCode == -300) return "Offset too large for 32-bit address space in debug read";
+        // Debug Read specific codes
         if (errorCode == -301) return "Error calculating target address in debug read";
+        if (errorCode == -300) return "Offset too large for 32-bit address space in debug read";
+        if (errorCode == -100) return "Partial read (Debug)";
+
+        // Capture Read specific codes/statuses
+        if (errorCode == -101) return "Partial read (Capture)";
+        if (errorCode == -5) return "Exception during initial value read (Capture)";
+        if (errorCode == -4) return "Read zero value, waiting for non-zero (Capture status)";
+        if (errorCode == -3) return "Offset too large for 32-bit address space (Capture)";
+        
+        // General Write operation codes (can be reused if context is clear)
+        // -1: Offset too large (Write)
+        // -2: Exception in write loop (Write)
+
+        // Default to Win32Exception message for other codes
         return new System.ComponentModel.Win32Exception(errorCode).Message;
     }
 }
